@@ -29,13 +29,13 @@ type Store interface {
 	// to return rows. If timings is true, then timing information will
 	// be return. If tx is true, then either all queries will be executed
 	// successfully or it will as though none executed.
-	Execute(queries []string, timings, tx bool) ([]*sql.Result, error)
+	Execute(er *store.ExecuteRequest) ([]*sql.Result, error)
 
 	// Query executes a slice of queries, each of which returns rows. If
 	// timings is true, then timing information will be returned. If tx
 	// is true, then all queries will take place while a read transaction
 	// is held on the database.
-	Query(queries []string, timings, tx bool, lvl store.ConsistencyLevel) ([]*sql.Rows, error)
+	Query(qr *store.QueryRequest) ([]*sql.Rows, error)
 
 	// Join joins the node, reachable at addr, to this node.
 	Join(addr string) error
@@ -244,9 +244,9 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/status"):
 		s.handleStatus(w, r)
 	case r.URL.Path == "/debug/vars" && s.Expvar:
-		serveExpvar(w, r)
+		s.handleExpvar(w, r)
 	case strings.HasPrefix(r.URL.Path, "/debug/pprof") && s.Pprof:
-		servePprof(w, r)
+		s.handlePprof(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -421,7 +421,7 @@ func (s *Service) handleLoad(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 
 	queries := []string{string(b)}
-	results, err := s.store.Execute(queries, timings, false)
+	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, false})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.store.Peer(s.store.Leader())
@@ -568,7 +568,7 @@ func (s *Service) handleExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.Execute(queries, timings, isTx)
+	results, err := s.store.Execute(&store.ExecuteRequest{queries, timings, isTx})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.store.Peer(s.store.Leader())
@@ -650,7 +650,7 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.store.Query(queries, timings, isTx, lvl)
+	results, err := s.store.Query(&store.QueryRequest{queries, timings, isTx, lvl})
 	if err != nil {
 		if err == store.ErrNotLeader {
 			leader := s.store.Peer(s.store.Leader())
@@ -669,6 +669,45 @@ func (s *Service) handleQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	resp.end = time.Now()
 	writeResponse(w, r, resp)
+}
+
+// handleExpvar serves registered expvar information over HTTP.
+func (s *Service) handleExpvar(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if !s.CheckRequestPerm(r, PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	fmt.Fprintf(w, "{\n")
+	first := true
+	expvar.Do(func(kv expvar.KeyValue) {
+		if !first {
+			fmt.Fprintf(w, ",\n")
+		}
+		first = false
+		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
+	})
+	fmt.Fprintf(w, "\n}\n")
+}
+
+// handlePprof serves pprof information over HTTP.
+func (s *Service) handlePprof(w http.ResponseWriter, r *http.Request) {
+	if !s.CheckRequestPerm(r, PermStatus) {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	switch r.URL.Path {
+	case "/debug/pprof/cmdline":
+		pprof.Cmdline(w, r)
+	case "/debug/pprof/profile":
+		pprof.Profile(w, r)
+	case "/debug/pprof/symbol":
+		pprof.Symbol(w, r)
+	default:
+		pprof.Index(w, r)
+	}
 }
 
 // Addr returns the address on which the Service is listening
@@ -711,36 +750,6 @@ func (s *Service) addBuildVersion(w http.ResponseWriter) {
 		version = v
 	}
 	w.Header().Add(VersionHTTPHeader, version)
-}
-
-// serveExpvar serves registered expvar information over HTTP.
-func serveExpvar(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-	fmt.Fprintf(w, "{\n")
-	first := true
-	expvar.Do(func(kv expvar.KeyValue) {
-		if !first {
-			fmt.Fprintf(w, ",\n")
-		}
-		first = false
-		fmt.Fprintf(w, "%q: %s", kv.Key, kv.Value)
-	})
-	fmt.Fprintf(w, "\n}\n")
-}
-
-// servePprof serves pprof information over HTTP.
-func servePprof(w http.ResponseWriter, r *http.Request) {
-	switch r.URL.Path {
-	case "/debug/pprof/cmdline":
-		pprof.Cmdline(w, r)
-	case "/debug/pprof/profile":
-		pprof.Profile(w, r)
-	case "/debug/pprof/symbol":
-		pprof.Symbol(w, r)
-	default:
-		pprof.Index(w, r)
-	}
 }
 
 func writeResponse(w http.ResponseWriter, r *http.Request, j *Response) {

@@ -1,3 +1,17 @@
+## 4.2.2 (December 7th 2017)
+- [PR #383](https://github.com/rqlite/rqlite/pull/383): Fix unit tests after underlying SQLite master table changes.
+- [PR #384](https://github.com/rqlite/rqlite/pull/384): "status" perm required to access Go runtime information.
+
+## 4.2.1 (November 10th 2017)
+- [PR #367](https://github.com/rqlite/rqlite/pull/367): Remove superflous leading space at CLI prompt.
+- [PR #368](https://github.com/rqlite/rqlite/pull/368): CLI displays clear error message when not authorized.
+- [PR #370](https://github.com/rqlite/rqlite/pull/370): CLI does not need to indent JSON when making requests.
+- [PR #373](https://github.com/rqlite/rqlite/pull/373), [PR #374](https://github.com/rqlite/rqlite/pull/374): Add simple INSERT-only benchmarking tool.
+
+## 4.2.0 (October 19th 2017)
+- [PR #354](https://github.com/rqlite/rqlite/pull/354): Vendor Raft.
+- [PR #354](https://github.com/rqlite/rqlite/pull/354): Move to Go 1.9.1.
+
 ## 4.1.0 (September 3rd 2017)
 - [PR #342](https://github.com/rqlite/rqlite/pull/342): Add missing Store parameters to diagnostic output.
 - [PR #343](https://github.com/rqlite/rqlite/pull/343): Support fetching [expvar](https://golang.org/pkg/expvar/) information via CLI.

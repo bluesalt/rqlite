@@ -41,7 +41,7 @@ func main() {
 			return nil
 		}
 
-		prefix := fmt.Sprintf("%s:%d> ", argv.Host, argv.Port)
+		prefix := fmt.Sprintf("%s:%d>", argv.Host, argv.Port)
 	FOR_READ:
 		for {
 			line, err := prompt.Basic(prefix, false)
@@ -90,7 +90,7 @@ func main() {
 }
 
 func makeJSONBody(line string) string {
-	data, err := json.MarshalIndent([]string{line}, "", "    ")
+	data, err := json.Marshal([]string{line})
 	if err != nil {
 		return ""
 	}
@@ -133,6 +133,10 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 		}
 		defer resp.Body.Close()
 
+		if resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("unauthorized")
+		}
+
 		// Check for redirect.
 		if resp.StatusCode == http.StatusMovedPermanently {
 			nRedirect++
@@ -148,10 +152,7 @@ func sendRequest(ctx *cli.Context, urlStr string, line string, argv *argT, ret i
 			return err
 		}
 
-		if err := json.Unmarshal(body, ret); err != nil {
-			return err
-		}
-		return nil
+		return json.Unmarshal(body, ret)
 	}
 }
 
@@ -189,6 +190,10 @@ func cliJSON(ctx *cli.Context, cmd, line, url string, argv *argT) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("unauthorized")
+	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
